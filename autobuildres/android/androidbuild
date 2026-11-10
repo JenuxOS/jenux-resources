@@ -1,0 +1,706 @@
+#!/bin/zsh
+function createmenu
+{
+export menudesc=`stty -a|grep rows|cut -f 2-6 -d \;|cut -f 3,5,8 -d \ |tr \; \ |sed s/"  "/" "/|sed s/"  "/" "/`
+cat $1|tail -n 1 >/tmp/itemlist
+export numitems=`cat /tmp/itemlist|wc -l`
+export linecounter=1
+while true;do
+cat /tmp/itemlist|head -n $linecounter|tail -n 1 >>/tmp/items
+export linecounter=$(($linecounter+1))
+if [ $linecounter -gt $numitems ];then
+break
+else
+continue
+fi
+done
+echo whiptail --menu --nocancel --notags `cat $1|head -n 1` `echo -n $menudesc` `cat $1|tail -n 1`>/tmp/menu
+chmod 755 /tmp/menu
+/tmp/menu 2>/tmp/choice
+export choice=`cat /tmp/choice|cut -f 2 -d \;`
+cat /tmp/itemlist|sed s/"\"\ /\\n/g"|sed "s/\"//g" > /tmp/items
+export testnum=`cat /tmp/items|grep -nw $choice |cut -f 1 -d \:`
+export itemname=`cat /tmp/items|head -n $(($testnum+1))|tail -n 1`
+rm /tmp/choice /tmp/menu /tmp/itemlist /tmp/items /tmp/dynmenu /tmp/menutitle
+clear
+}
+function createdynamicmenu
+{
+$@>/tmp/itemlist
+export numitems=`cat /tmp/itemlist|wc -l`
+export counter=1
+if [ -f /tmp/menutitle ];then
+export title=`cat /tmp/menutitle|head -n 1`
+else
+export title="$numitems items available"
+fi
+echo \"$title\" > /tmp/dynmenu
+while true;do
+export ltr=`cat /tmp/itemlist|head -n $counter|tail -n 1|cut -c 1`
+export item=`cat /tmp/itemlist|head -n $counter|tail -n 1`
+echo -n \" >> /tmp/dynmenu
+if [ $ltr = \" ];then
+export ltr="|"
+fi
+echo -n $ltr\;$counter >> /tmp/dynmenu
+echo -n \"\  >>/tmp/dynmenu
+echo -n \" >> /tmp/dynmenu
+if echo $item|grep -q \";then
+export item=`echo $item|sed "s/\"/\|/g"`
+fi
+echo -n $item >> /tmp/dynmenu
+echo -n \"\  >>/tmp/dynmenu
+export counter=$(($counter+1))
+if [ $counter -gt $numitems ];then
+break
+else
+continue
+fi
+done
+createmenu /tmp/dynmenu
+}
+export baseurl=https://nashcentral.duckdns.org
+if [ -e ~/unattend ];then
+export unattend=1
+source ~/unattend
+else
+if grep -q \#android ~/unattend;then
+true
+else
+echo \#android > ~/unattend
+fi
+fi
+if echo $unattend|grep -qw 1;then
+true
+else
+echo "Warning! Improper use of this installer can lead to loss of data. To continue, press enter. Otherwise, press control c to abort."
+read dumbyvar
+fi
+if [ -e ~/.jenux_keyring_done ];then
+sleep .01
+else
+echo checking for keyring updates
+systemctl restart systemd-timesyncd
+rm -rf /etc/pacman.d/gnupg
+pacman-key --init > /dev/null 2>/dev/null
+pacman-key --populate > /dev/null 2>/dev/null
+clear
+echo checking for mirrorlist updates
+reflector --latest 50 --sort age --protocol https > /etc/pacman.d/mirrorlist.new
+if cat /etc/pacman.d/mirrorlist.new|grep -qw Server\ \=|wc -l|grep -qw 0;then
+rm /etc/pacman.d/mirrorlist.new
+else
+mv /etc/pacman.d/mirrorlist.new /etc/pacman.d/mirrorlist
+fi
+if uname -m|grep -iqw x86_64;then
+if hostname|grep -qw archiso;then
+export pkgarch=`uname -m`
+mv /etc/pacman.conf /etc/pacman.conf.prejenux
+curl -s -Lo /etc/pacman.conf $baseurl"/autobuildres/linux/pacman."$pkgarch".conf"
+clear
+else
+sleep .01
+fi
+pacman --needed --noconfirm -Swy archlinux-keyring beep pacman-mirrorlist dmidecode
+else
+pacman --needed --noconfirm -Swy archlinux32-keyring beep pacman-mirrorlist dmidecode
+fi
+if ls /var/cache/pacman/pkg|wc -l|grep -qw 0;then
+sleep .01
+else
+cd /var/cache/pacman/pkg
+rm *.sig
+pacman --noconfirm --overwrite \* -U *
+rm /var/cache/pacman/pkg/*
+rm -rf /etc/pacman.d/gnupg
+if uname -m|grep -iqw x86_64;then
+export keylist="archlinux"
+else
+export keylist="archlinux32"
+fi
+echo updating keyrings
+while true;do
+if rm -rf /etc/pacman.d/gnupg;pacman-key --config /etc/pacman.conf --gpgdir /etc/pacman.d/gnupg --init > /dev/null 2>/dev/null;sleep 1;pacman-key --config /etc/pacman.conf --gpgdir /etc/pacman.d/gnupg --populate `echo -n $keylist` > /dev/null 2>/dev/null;then
+break
+else
+rm -rf /etc/pacman.d/gnupg
+killall -9 gpg-agent
+rm -rf /etc/pacman.d/gnupg
+continue
+fi
+done
+cd $OLDPWD
+echo > ~/.jenux_keyring_done
+fi
+fi
+while true;do
+if [ -z $presetname ];then
+echo "\"select a version of android to install\"">/tmp/vermenu
+echo -n "\"c\" \"current\" ">>/tmp/vermenu
+echo -n "\"f\" \"current android go build\" ">>/tmp/vermenu
+echo -n "\"r\" \"current surface build\" ">>/tmp/vermenu
+echo -n "\"l\" \"legacy\" ">>/tmp/vermenu
+echo -n "\"g\" \"legacy android go build\" ">>/tmp/vermenu
+echo -n "\"s\" \"legacy surface build\" ">>/tmp/vermenu
+echo -n "\"u\" \"custom\" ">>/tmp/vermenu
+createmenu /tmp/vermenu
+case "$choice" in
+c)
+export presetname=current
+export urlpattern=bliss-v
+break
+;;
+f)
+export presetname=current-go
+export urlpattern=bliss-go-v
+break
+;;
+g)
+export presetname=legacy-go
+export urlpattern=bliss-go-v
+break
+;;
+l)
+export presetname=legacy
+export urlpattern=bliss-v
+break
+;;
+r)
+export presetname=current-surface
+export urlpattern=bliss-surface-v
+break
+;;
+s)
+export presetname=legacy-surface
+export urlpattern=bliss-surface-v
+break
+;;
+u)
+export presetname=custom
+break
+;;
+*)
+echo "unsupported preset "$presetname", defaulting to current"
+export presetname=current
+export urlpattern=bliss-v
+break
+;;
+esac
+else
+case "$presetname" in
+current)
+export urlpattern=bliss-v
+break
+;;
+current-go)
+export urlpattern=bliss-go-v
+break
+;;
+current-surface)
+export urlpattern=bliss-surface-v
+break
+;;
+legacy)
+export urlpattern=bliss-v
+break
+;;
+legacy-go)
+export urlpattern=bliss-go-v
+break
+;;
+legacy-surface)
+export urlpattern=bliss-surface-v
+break
+;;
+esac
+break
+fi
+done
+if [ -e /tmp/urls ];then
+sleep .01
+else
+echo -en > /tmp/urls
+while true;do
+export len=`wc -l /tmp/urls|cut -f 1 -d \  `
+if [ $len -ge 2 ];then
+echo -en > /tmp/images
+for u in `cat /tmp/urls`;do
+basename $u >> /tmp/images
+done
+break
+else
+echo retrieving image list
+echo > /tmp/urls
+for u in "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS14/FOSS/Generic" "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS14/OpenGApps/Generic" "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS14/FOSS/Go" "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS14/OpenGApps/Go" "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS14/FOSS/Surface" "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS14/OpenGApps/Surface" "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS15/FOSS/Generic" "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS15/Gapps/Generic" "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS15/FOSS/Go" "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS15/Gapps/Go" "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS15/FOSS/Surface" "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS15/Gapps/Surface" "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS16/FOSS/Generic" "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS16/Gapps/Generic" "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS16/FOSS/Go" "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS16/Gapps/Go" "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS16/FOSS/Surface" "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS16/Gapps/Surface";do
+export url=`lynx --dump -listonly -nonumbers $u|grep -w iso|sed "/sha256/d;/timeline/d;s|\/download||g"|sort|uniq`
+echo $url
+unset url
+done > /tmp/urls
+continue
+fi
+done
+fi
+echo -en > /tmp/d
+for pattern in "Bliss-v" "Bliss-Go-v" "Bliss-Surface";do
+cat /tmp/images|grep $pattern |sort|uniq >> /tmp/d
+done
+echo -en >>/tmp/d
+export imgln=`wc -l /tmp/images|cut -f 1 -d \  `
+export simgln=`wc -l /tmp/d|cut -f 1 -d \  `
+if echo $imgln|grep -qw $simgln;then
+mv /tmp/d /tmp/images
+else
+rm /tmp/d
+fi
+if echo $presetname|grep -iqw current-go;then
+export url=`cat /tmp/urls|tr \\  \\\n|grep -i $urlpattern|sort -V|tail -n 1`
+elif echo $presetname|grep -iqw current-surface;then
+export url=`cat /tmp/urls|tr \\  \\\n|grep -i $urlpattern|sort -V|tail -n 1`
+elif echo $presetname|grep -iqw current;then
+export url=`cat /tmp/urls|tr \\  \\\n|grep -i $urlpattern|sort -V|tail -n 1`
+elif echo $presetname|grep -iqw legacy-go;then
+export url=`cat /tmp/urls|tr \\  \\\n|grep -i $urlpattern|sort -V|head -n 1`
+elif echo $presetname|grep -iqw legacy-surface;then
+export url=`cat /tmp/urls|tr \\  \\\n|grep -i $urlpattern|sort -V|head -n 1`
+elif echo $presetname|grep -iqw legacy;then
+export url=`cat /tmp/urls|tr \\  \\\n|grep -i $urlpattern|sort -V|head -n 1`
+else
+echo please select an image > /tmp/menutitle
+createdynamicmenu cat /tmp/images
+export url=`cat /tmp/urls|grep -w $itemname`
+fi
+if grep -q presetname ~/unattend;then
+true
+else
+echo export presetname=\"$presetname\" >> ~/unattend
+fi
+if grep -q url ~/unattend;then
+true
+else
+echo export url=\"$url\" >> ~/unattend
+fi
+if echo $unattend|grep -qw 1;then
+true
+else
+beep -f 750 -l 500
+echo "on the next screen, you will be asked to select a hard disk to install to. Please note: If you have other opperating systems on your computer that you would like to multi boot with, please resize their partitions manually and create enough free space for android. At a minimum, android system files and recovery environment will require at least 8 GB of disk space, excluding apps, system components such as dalvik/art caches and other user data. WARNING!!!!! IMPROPER PARTITIONING WILL LEAD TO LOSS OF DATA!!!!! Whenever making changes to partition tables, please make sure you back up all data on the disk in case of issues. In the Jenux ISO Main Menu, an option to run the Clonezilla backup program is provided for automated backup and restores of hard disks. Please press enter to select your target disk."
+read confirm
+fi
+while true;do
+if [ -z $disk ];then
+sh -c 'echo -n "print devices"|parted|grep /dev|grep \(>/tmp/disk;cat /tmp/disk|tr \  \:>/tmp/disks;rm /tmp/disk'
+createdynamicmenu cat /tmp/disks
+export disk=`echo $itemname|cut -f 1 -d \:|cut -f 2 -d \"`
+unset choice
+clear
+else
+break
+fi
+done
+while true;do
+if [ $disk = "root_only" ];then
+export partmethod=s
+export fmtfs=n
+export fmtboot=n
+export encrypt=n
+ln -s /dev/null /dev/disk/by-partlabel/EFI
+ln -s /dev/null /dev/disk/by-partlabel/linux
+break
+fi
+if [ -e $disk ];then
+break
+else
+sh -c 'echo -n "print devices"|parted|grep /dev|grep \(>/tmp/disk;cat /tmp/disk|tr \  \:>/tmp/disks;rm /tmp/disk'
+createdynamicmenu cat /tmp/disks
+export disk=`echo $itemname|cut -f 1 -d \:|cut -f 2 -d \"`
+unset choice
+fi
+done
+while true;do
+if [ -z $partmethod ];then
+echo "\"How would you like to partition your disk?\"">/tmp/partmenu
+echo -n "\"e\" \"erase disk and install android, will use all space on disk\" \"m\" \"manually, prints instructions and drops to gdisk partitioning console\" \"s\" \"skip partitioning, partition has already been created\"" >> /tmp/partmenu
+createmenu /tmp/partmenu
+case "$choice" in
+e)
+export partmethod=e
+;;
+m)
+export partmethod=m
+;;
+s)
+export partmethod=s
+;;
+esac
+else
+break
+fi
+done
+case "$partmethod" in
+e)
+export fmtboot=y
+export disklayout="  -o -n 1:2048:4096:EF02 -t 1:EF02 -c 1:BIOS  -n 2:6144:1234943:EF00 -t 2:EF00 -c 2:EFI  -N 3 -t 3:8300 -c 3:linux  "
+echo sgdisk -g $disklayout $disk >> /tmp/part
+chmod 755 /tmp/part
+export disksize=`lsblk -nro size $disk|head -n 1|tr -d \\\n`
+echo repartitioning $disksize disk $disk", destroying all data, in 5 seconds! Press control c to abort and drop to system shell"
+read -t 5 var
+sgdisk -z $disk
+/tmp/part
+rm /tmp/part
+partprobe $disk
+sleep 1.5
+export maxparts=3
+export partwipecounter=1
+while [ $partwipecounter -le $maxparts ];do
+if [ -e $disk"p"$partwipecounter ];then
+wipefs -a $disk"p"$partwipecounter
+else
+wipefs -a $disk$partwipecounter
+fi
+export partwipecounter=$(($partwipecounter+1))
+done
+;;
+m)
+echo "partitioning instructions:"
+echo "To create new partitions, type n at the command prompt. To change a partition's name after creation, type c."
+echo "create at least 3 partitions. The following layout is suggested:"
+echo "partition 1: from sector 0 to 2M, type code ef02, for BIOS Boot, name none"
+echo "partition 2, from 2M to 502M, for uefi boot and linux kernel, type code ef00, name EFI"
+echo "partition 3, from 502M to however large you want your linux installation to be, default type code 8300, name linux."
+echo "feel free to make changes to this suggested layout, but the type codes and partition names must be as stated in the instructions for a successful installation."
+echo "if you made a mestake and want to start from scratch, type o, y, enter to destroy the in memory copy of the partition table. Don't forget to type w enter y enter to write your new partition table to the disk."
+gdisk $disk 
+;;
+s)
+echo partitioning of $disk has been skipped due to user override
+;;
+esac
+partprobe $disk
+sleep 1.5
+echo waiting for EFI partition
+while true;do
+if [ $disk = root_only ];then
+break
+fi
+if [ -e /dev/disk/by-partlabel/EFI ];then
+break
+else
+sleep 1.5
+partprobe $disk
+continue
+fi
+done
+echo waiting for linux partition
+while true;do
+if [ $disk = root_only ];then
+break
+fi
+if [ -e /dev/disk/by-partlabel/linux ];then
+break
+else
+sleep 1.5
+partprobe $disk
+continue
+fi
+done
+if [ -z $disklayout ];then
+export disklen=`sgdisk -p $disk|wc -l`
+export partliststart=`sgdisk -p $disk|grep -nw Number|cut -f 1 -d :`
+export firstpart=$(($disklen-$partliststart))
+export IFS=$(echo -en \\n\\b)
+export disklayout=`echo -n \  -o\  `
+export partcounter=0
+for part in `sgdisk -p $disk|tail -n $firstpart|tr -s \  `;do
+export num=`echo $part|cut -f 2 -d \  `
+export startsect=`echo $part|cut -f 3 -d \  `
+export endsect=`echo $part|cut -f 4 -d \  `
+export type=`echo $part|cut -f 7 -d \  `
+export name=`echo $part|cut -f 8 -d \  `
+if [ $(($partcounter+1+$partliststart)) = $disklen ];then
+export disklayout=$disklayout`echo -n - -N $num -t $num:$type -c $num:$name \  `
+else
+export disklayout=$disklayout`echo -n - -n $num:$startsect:$endsect:$type -t $num:$type -c $num:$name \  `
+fi
+export partcounter=$(($partcounter+1))
+done
+fi
+if grep -q disk= ~/unattend;then
+true
+else
+echo export disk=\'$disk\' >> ~/unattend
+fi
+if grep -q partmethod= ~/unattend;then
+true
+else
+echo export partmethod=\'$partmethod\' >> ~/unattend
+fi
+if grep -q disklayout= ~/unattend;then
+true
+else
+echo export disklayout=\'$disklayout\' >> ~/unattend
+fi
+if [ -z $boot ];then
+if [ -e /dev/disk/by-partlabel/EFI ];then
+export boot="/dev/disk/by-partlabel/EFI"
+else
+clear
+echo "Your EFI System Partition which will hold the kernel and bootloader cannot automatically be detected. Please select it from the following list."
+read var
+export entries=`lsblk -nro name,size $disk|wc -l`
+lsblk -nro name,size $disk|head -n $entries|tail -n $(($entries-1)) > /tmp/vols
+createdynamicmenu cat /tmp/vols
+export bootdev=`echo $itemname|cut -f 2 -d \"|cut -f 1 -d \  `
+export boot=/dev/$bootdev
+sgdisk $disk -c=$choice:EFI
+fi
+fi
+if [ -z $root ];then
+if [ -e /dev/disk/by-partlabel/linux ];then
+export root="/dev/disk/by-partlabel/linux"
+else
+clear
+echo "Your root device cannot automatically be detected. Please select it from the following list."
+read var
+export entries=`lsblk -nro name,size $disk|wc -l`
+lsblk -nro name,size $disk|head -n $entries|tail -n $(($entries-1)) > /tmp/vols
+createdynamicmenu cat /tmp/vols
+export rootdev=`echo $itemname|cut -f 2 -d \"|cut -f 1 -d \  `
+export root=/dev/$rootdev
+sgdisk $disk -c=$choice:linux
+fi
+fi
+clear
+if grep -qw boot= ~/unattend;then
+true
+else
+echo export boot=\'$boot\' >> ~/unattend
+fi
+if grep -qw root= ~/unattend;then
+true
+else
+echo export root=\'$root\' >> ~/unattend
+fi
+while true;do
+if [ -z $fmtboot ];then
+echo would you like to format your EFI System partition\?
+read fmtboot
+case "$fmtboot" in
+y)
+break
+;;
+n)
+break
+;;
+*)
+continue
+;;
+esac
+else
+break
+fi
+done
+case "$fmtboot" in
+y)
+mkfs.vfat -n EFI $boot
+;;
+n)
+echo backing up ESP
+mount $boot /boot
+cd /boot
+tar --exclude vmlinuz-linux --exclude initramfs-linux.img --exclude initramfs-linux-fallback.img -czf ~/esp.tar.gz .
+cd $OLDPWD
+rm -rf /boot/*
+umount /boot
+;;
+esac
+if grep -q fmtboot ~/unattend;then
+true
+else
+echo export fmtboot=\'$fmtboot\' >> ~/unattend
+fi
+while true;do
+if blkid $root|grep -qw ext4;then
+if [ -z $fmtfs ];then
+echo ext4 partition detected. Format anyway\?
+read fmtfs
+fi
+else
+echo root partition does not contain an ext4 filesystem, formatting
+export fmtfs="y"
+fi
+case "$fmtfs" in
+y)
+echo formatting filesystem
+echo y|mkfs.ext4 -q -L root $root
+break
+;;
+n)
+if blkid $root|grep -iqw LABEL=\"root\";then
+sleep .01
+else
+echo adding root label to $root
+e2label $root root
+fi
+break
+;;
+*)
+continue
+;;
+esac
+done
+tune2fs -O encrypt $root
+mount $root /mnt
+if grep -q fmtfs= ~/unattend;then
+true
+else
+echo export fmtfs=\'$fmtfs\' >> ~/unattend
+fi
+mkdir -p /mnt/boot/EFI
+mount $boot /mnt/boot/EFI
+mkdir -p /mnt/boot/EFI/EFI
+if [ -f ~/esp.tar.gz ];then
+mv ~/esp.tar.gz /mnt/boot.old.tar.gz
+echo restoring old ESP contents to /boot.old
+mkdir -p /mnt/boot.old
+cd /mnt/boot.old
+tar -xf /mnt/boot.old.tar.gz
+cd $OLDPWD
+fi
+genfstab /mnt > /tmp/fstab
+echo android-x86-recovery > /tmp/hostname
+cd /mnt
+echo -n $disk > /mnt/disk
+echo "Downloading $presetname android-x86 iso"
+while true;do
+if curl -C - -Lo android.iso $url;then
+break
+else
+continue
+fi
+done
+echo preparing for recovery environment install
+while true;do
+if curl -o recenvinstall $baseurl"/autobuildres/linux/pkg.base";then
+break
+else
+continue
+fi
+done
+chmod 700 recenvinstall
+while true;do
+if ./recenvinstall;then
+break
+else
+continue
+fi
+done
+while true;do
+if curl -L $baseurl"/autobuildres/android/recovery.tar.gz"|tar -xz;then
+break
+else
+continue
+fi
+done
+echo downloading android install script
+while true;do
+if curl -Lo /mnt/usr/bin/iso2access $baseurl"/autobuildres/android/iso2access";then
+break
+else
+continue
+fi
+done
+chmod 755 /mnt/usr/bin/iso2access
+mv /tmp/fstab /mnt/etc/fstab
+mv /tmp/hostname /mnt/etc/hostname
+mkdir -p /mnt/var/lib/alsa
+alsactl -f /mnt/var/lib/alsa/asound.state store
+if [ -e /etc/asound.conf ];then
+cp /etc/asound.conf /mnt/etc
+fi
+rm -rf /mnt/var/cache/pacman/pkg/*
+while true;do
+beep -f 1000 -l 500
+clear
+arch-chroot /mnt /etc/postinstall.sh $disk
+if [ -f /mnt/etc/postinstall.sh ];then
+continue
+else
+break
+fi
+done
+rm ./recenvinstall
+cd
+echo "syncing disks..."
+sync
+if [ -e /root/postinstall ];then
+cp /root/postinstall /mnt
+chmod 755 /mnt/postinstall
+while true;do
+if arch-chroot /mnt /postinstall;then
+rm /mnt/postinstall
+break
+else
+continue
+fi
+done
+fi
+echo ensuring that grub will load on next boot
+for f in `efibootmgr|grep Boot|grep \*|cut -f 1 -d \  |sed "s|Boot||g;s|\*||g"`;do
+efibootmgr -b $f -B
+done
+export efipartnum=`readlink /dev/disk/by-partlabel/EFI|sed "s|..\/..\/|\/dev\/|g;s|$disk||g;s|p||g"`
+efibootmgr -T
+efibootmgr --create --disk $disk --part $efipartnum --loader "efi\boot\bootx64.efi" --label "Windows Boot Manager"
+while true;do
+if [ -z $completeaction ];then
+echo "\"installation complete! Please select an option.\"">/tmp/actmenu
+echo -n "\"p\" \"power off system\" \"r\" \"reboot system\" \"s\" \"Drop To System Shell\"">>/tmp/actmenu
+createmenu /tmp/actmenu
+case "$choice" in
+p)
+export completeaction="poweroff"
+;;
+r)
+export completeaction="reboot"
+;;
+s)
+export completeaction="shell"
+;;
+esac
+break
+else
+break
+fi
+done
+if grep -q completeaction= ~/unattend;then
+true
+else
+echo export completeaction=\"$completeaction\" >> ~/unattend
+fi
+cd
+if [ -e /mnt/unattend ];then
+echo using unattend on local disk
+else
+echo copying unattend settings to installed system
+cp ~/unattend /mnt
+chown root:root /mnt/unattend
+chmod 600 /mnt/unattend
+fi
+case "$completeaction" in
+poweroff)
+echo "Installation complete! powering off"
+sync
+poweroff -f
+;;
+reboot)
+echo "Installation complete! rebooting"
+sync
+reboot -f
+;;
+shell)
+echo installation complete! $root is mounted on /mnt, $boot is mounted on /mnt/boot/EFI, Launching shell
+cd
+zsh
+;;
+esac

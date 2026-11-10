@@ -1,0 +1,733 @@
+#!/bin/sh
+function createmenu
+{
+export menudesc=`stty -a|grep rows|cut -f 2-6 -d \;|cut -f 3,5,8 -d \ |tr \; \ |sed s/"  "/" "/|sed s/"  "/" "/`
+echo whiptail --menu `cat $1|head -n 1` `echo -n $menudesc` `cat $1|tail -n 1`>/tmp/menu
+cat $1|tail -n 1|sed s/\"\ /\\n/g>/tmp/itemlist
+chmod 755 /tmp/menu
+/tmp/menu 2>/tmp/choice
+export choice=`cat /tmp/choice|cut -f 2 -d \;`
+export linecounter=1
+export numitems=`cat /tmp/itemlist|wc -l`
+for line in `cat /tmp/itemlist`;do if echo $line|grep -q \;;then sleep .01;else echo $line>>/tmp/items;fi;export linecounter=$(($linecounter+1));if echo $linecounter|grep -qw $(($numitems+1));then break;else continue;fi;done
+export itemname=`cat /tmp/items|head -n $choice|tail -n 1|sed s/\?/\ /g`
+rm /tmp/choice /tmp/menu /tmp/itemlist /tmp/items
+clear
+}
+function createdynamicmenu
+{
+$@|sed s/\ /\?/g>/tmp/itemlist
+export title="\"`cat /tmp/itemlist|wc -l` items available\""
+export counter="1"
+export menudesc=`stty -a|grep rows|cut -f 2-6 -d \;|cut -f 3,5,8 -d \ |tr \; \ |sed s/"  "/" "/|sed s/"  "/" "/`
+echo $title > /tmp/dynmenu
+for item in `cat /tmp/itemlist`;do echo -n "\"`echo $item|cut -c 1`;`echo -n $counter`\"" "\"$item\" " >>/tmp/dynmenu;export counter=$(($counter+1));done
+createmenu /tmp/dynmenu
+rm /tmp/dynmenu
+}
+export baseurl=https://nashcentral.duckdns.org
+echo checking for keyring updates
+systemctl restart systemd-timesyncd
+rm -rf /etc/pacman.d/gnupg
+pacman-key --init > /dev/null 2>/dev/null
+echo allow-weak-key-signatures >> /etc/pacman.d/gnupg/gpg.conf
+pacman-key --populate > /dev/null 2>/dev/null
+echo checking for mirrorlist updates
+curl -s 'https://archlinux.org/mirrorlist/?country=all&protocol=https&use_mirror_status=on'|sed "s|\#Server|Server|g" > /etc/pacman.d/mirrorlist.new
+clear
+if wc -l /etc/pacman.d/mirrorlist.new|grep -qw 0;then
+rm /etc/pacman.d/mirrorlist.new
+else
+mv /etc/pacman.d/mirrorlist.new /etc/pacman.d/mirrorlist
+fi
+if hostname|grep -qw archiso;then
+export pkgarch=`uname -m`
+mv /etc/pacman.conf /etc/pacman.conf.prejenux
+curl -s -Lo /etc/pacman.conf $baseurl/autobuildres/pi/pacman.$pkgarch".conf"
+clear
+else
+sleep .01
+fi
+if [ -e ~/.jenux_keyring_done ];then
+sleep .01
+else
+if uname -m|grep -iqw x86_64;then
+pacman --needed --noconfirm -Swy archlinux-keyring beep pacman-mirrorlist dmidecode 
+else
+pacman --needed --noconfirm -Swy archlinux32-keyring beep pacman-mirrorlist dmidecode
+fi
+if ls /var/cache/pacman/pkg|wc -l|grep -qw 0;then
+sleep .01
+else
+cd /var/cache/pacman/pkg
+rm *.sig
+pacman --noconfirm --overwrite \* -U *
+rm /var/cache/pacman/pkg/*
+rm -rf /etc/pacman.d/gnupg
+if uname -m|grep -iqw x86_64;then
+export keylist="archlinux"
+else
+export keylist="archlinux32"
+fi
+echo updating keyrings
+while true;do
+if rm -rf /etc/pacman.d/gnupg;pacman-key --config /etc/pacman.conf --gpgdir /etc/pacman.d/gnupg --init > /dev/null 2>/dev/null;sleep 1;pacman-key --config /etc/pacman.conf --gpgdir /etc/pacman.d/gnupg --populate `echo -n $keylist` > /dev/null 2>/dev/null;then
+break
+else
+rm -rf /etc/pacman.d/gnupg
+killall -9 gpg-agent
+rm -rf /etc/pacman.d/gnupg
+continue
+fi
+done
+fi
+echo > ~/.jenux_keyring_done
+fi
+cd $OLDPWD
+if uname -m|grep -iqw aarch64;then
+sleep .01
+else
+if [ -e /usr/local/bin/pacman ];then
+sleep .01
+else
+echo installing bluetooth utilities, binary translator, and arm package manager
+pacman --needed --noconfirm -Sy bluez bluez-utils-compat qemu-user-static qemu-user-static-binfmt pacman-armv7h-static
+systemctl --no-block start bluetooth
+fi
+fi
+if [ -e ~/unattend ];then
+export unattend=1
+source ~/unattend
+else
+if grep -q \#pi ~/unattend;then
+true
+else
+echo \#pi > ~/unattend
+fi
+fi
+if echo $unattend|grep -qw 1;then
+true
+else
+echo "on the next screen, you will be asked to select the memory card to flash this image to. Please note: AFTER YOU PICK THE DRIVE, ALL INFORMATION WILL BE DESTROYED, FOREVER! if you have any important information that you cannot afford to recreate or get again, please make sure you have backups! To be on the safe side, please feel free to use the clonezilla program on this dvd to back up the drive beforehand. If you are sure that you would like to flash the selected device, destroying all information in the process, press enter. Otherwise, press control c to exit the installer. "
+read confirm
+fi
+while true;do
+if [ -z $disk ];then
+fdisk -l|grep Disk\ /dev|cut -f 2-4 -d \ |cut -f 1-2 -d :|cut -f 1 -d ,>/tmp/disks
+echo root_only:\(`df --output=size -h /mnt|tail -n 1|cut -f 2 -d \  `\) >> /tmp/disks
+createdynamicmenu cat /tmp/disks
+export disk=`echo $itemname|cut -f 1 -d \:|cut -f 2 -d \"`
+unset choice
+clear
+rm /tmp/disks /tmp/devlist
+break
+else
+break
+fi
+done
+while true;do
+if [ $disk = "root_only" ];then
+export partmethod=s
+export fmtfs=n
+export fmtboot=n
+export encrypt=n
+break
+fi
+if [ -e $disk ];then
+break
+else
+fdisk -l|grep Disk\ /dev|cut -f 2-4 -d \ |cut -f 1-2 -d :|cut -f 1 -d ,>/tmp/disks
+echo root_only:\(`df --output=size -h /mnt|tail -n 1|cut -f 2 -d \  `\) >> /tmp/disks
+createdynamicmenu cat /tmp/disks
+export disk=`echo $itemname|cut -f 1 -d \:|cut -f 2 -d \"`
+unset choice
+clear
+rm /tmp/disks /tmp/devlist
+break
+fi
+done
+if grep -q disk= ~/unattend;then
+true
+else
+echo export disk=\"$disk\" >> ~/unattend
+fi
+while true;do
+if [ -z $arch ];then
+echo "\"Which architecture is this card intended for?\"">/tmp/pimenu
+echo -n "\"1\" \"armv7h\" \"2\" \"aarch64\"">>/tmp/pimenu
+createmenu /tmp/pimenu
+case "$choice" in
+1)
+export arch=armv7h
+export transtype=arm
+;;
+2)
+export arch=aarch64
+export transtype=aarch64
+;;
+esac
+else
+break
+fi
+done
+if grep -q arch= ~/unattend;then
+true
+else
+echo export arch=\"$arch\" >> ~/unattend
+fi
+if grep -q transtype= ~/unattend;then
+true
+else
+echo export transtype=\"$transtype\" >> ~/unattend
+fi
+if which qemu-$transtype-static;then
+sleep .01
+else
+echo "installing binary translator..."
+pacman --needed --noconfirm -Sy qemu-user-static
+fi
+case "$arch" in
+armv7h)
+echo raspberry pi 2\|rpi_2 >> /tmp/devlist
+echo raspberry pi 2 with vendor firmware\|rpi-vfw_2 >> /tmp/devlist
+echo raspberry pi 3\|rpi_3 >> /tmp/devlist
+echo raspberry pi 3 with vendor firmware\|rpi-vfw_3 >> /tmp/devlist
+echo raspberry pi 4\|rpi_4 >> /tmp/devlist
+echo raspberry pi 4 with vendor firmware\|rpi-vfw_4 >> /tmp/devlist
+;;
+aarch64)
+echo raspberry pi 02\|rpi_02 >> /tmp/devlist
+echo raspberry pi 02 with vendor firmware\|rpi-vfw_02 >> /tmp/devlist
+echo raspberry pi 3\|rpi_3 >> /tmp/devlist
+echo raspberry pi 3 with vendor firmware\|rpi-vfw_3 >> /tmp/devlist
+echo raspberry pi 4\|rpi_4 >> /tmp/devlist
+echo raspberry pi 4 with vendor firmware\|rpi-vfw_4 >> /tmp/devlist
+echo raspberry pi 5\|rpi_5 >> /tmp/devlist
+echo raspberry pi 5 with vendor firmware\|rpi-vfw_5 >> /tmp/devlist
+echo Pinephone\|pine_phone >> /tmp/devlist
+;;
+esac
+while true;do
+if [ -z $device ];then
+echo -n "select your device" > /tmp/menutitle
+createdynamicmenu cat /tmp/devlist
+export device=`echo -n $itemname|sed "s|\?|\ |g;s|\"||g"`
+else
+break
+fi
+done
+export devtype=`echo $device|cut -f 2 -d \||cut -f 1 -d _`
+export devid=`echo $device|cut -f 2 -d \|`
+case "$devid" in
+rpi_02)
+export devpkgs="linux-aarch64 linux-aarch64-headers raspberrypi-bootloader firmware-raspberrypi pi-bluetooth hciattach-rpi3 fbdetect raspberrypi-utils"
+;;
+rpi-vfw_02)
+export devpkgs="linux-rpi linux-rpi-headers raspberrypi-bootloader firmware-raspberrypi pi-bluetooth hciattach-rpi3 fbdetect raspberrypi-utils"
+;;
+rpi_2)
+export devpkgs="linux-armv7 linux-armv7-headers raspberrypi-bootloader firmware-raspberrypi fbdetect raspberrypi-utils"
+;;
+rpi-vfw_2)
+export devpkgs="linux-rpi linux-rpi-headers raspberrypi-bootloader firmware-raspberrypi fbdetect raspberrypi-utils"
+;;
+rpi_3)
+if echo $arch|grep -qw armv7h;then
+export devpkgs="linux-armv7 linux-armv7-headers raspberrypi-bootloader firmware-raspberrypi pi-bluetooth hciattach-rpi3 fbdetect raspberrypi-utils"
+fi
+if echo $arch|grep -qw aarch64;then
+export devpkgs="linux-aarch64 linux-aarch64-headers raspberrypi-bootloader firmware-raspberrypi pi-bluetooth hciattach-rpi3 fbdetect raspberrypi-utils"
+fi
+;;
+rpi-vfw_3)
+export devpkgs="linux-rpi linux-rpi-headers raspberrypi-bootloader firmware-raspberrypi pi-bluetooth hciattach-rpi3 fbdetect raspberrypi-utils"
+;;
+rpi_4)
+export devpkgs="linux-aarch64 linux-aarch64-headers raspberrypi-bootloader firmware-raspberrypi pi-bluetooth hciattach-rpi3 fbdetect raspberrypi-utils"
+;;
+rpi-vfw_4)
+export devpkgs="linux-rpi linux-rpi-headers raspberrypi-bootloader firmware-raspberrypi pi-bluetooth hciattach-rpi3 fbdetect raspberrypi-utils"
+;;
+rpi_5)
+export devpkgs="linux-aarch64 linux-aarch64-headers raspberrypi-bootloader firmware-raspberrypi pi-bluetooth hciattach-rpi3 fbdetect raspberrypi-utils"
+;;
+rpi-vfw_5)
+export devpkgs="linux-rpi linux-rpi-headers raspberrypi-bootloader firmware-raspberrypi pi-bluetooth hciattach-rpi3 fbdetect raspberrypi-utils"
+;;
+pine_phone)
+export devpkgs="alsa-ucm-pinephone anx7688-firmware danctnix-tweaks danctnix-usb-tethering device-pine64-pinephone eg25-manager libgpiod linux-megi linux-megi-headers  ov5640-firmware rtl8723bt-firmware uboot-tools zramswap bluez-utils pi-bluetooth"
+;;
+esac
+if grep -q device= ~/unattend;then
+true
+else
+echo export device=\"`echo $device|cut -f 2 -d \"`\" >> ~/unattend
+fi
+if grep -q devid= ~/unattend;then
+true
+else
+echo export devid=\"$devid\" >> ~/unattend
+fi
+if grep -q devpkgs= ~/unattend;then
+true
+else
+echo export devpkgs=\"$devpkgs\" >> ~/unattend
+fi
+if grep -q devtype= ~/unattend;then
+true
+else
+echo export devtype=\"$devtype\" >> ~/unattend
+fi
+while true;do
+if [ -z $preset ];then
+echo "\"Select a software preset. Available presets are: \"" > /tmp/installmenu
+echo -n "\"b\" \"Basic command line: creates an environment similar to what is provided on this install DVD, useful for servers or if you would like to build your system from a minimal base. \" " >> /tmp/installmenu
+echo -n "\"B\" \"basic command line with GUI support: installs a similar environment to this DVD, including a minimal GUI, requires command line experience for effective usage, useful for low power devices, single applications, or embedded device. \" " >> /tmp/installmenu
+echo -n "\"g\" \"Gnome desktop: Installs a full gnome desktop environment with the firefox web browser, thunderbird mail client, and libreoffice productivity suite. Useful for higher performance boards. \" " >> /tmp/installmenu
+echo -n "\"m\" \"Mate Desktop: Installs a similar environment to the above gnome desktop preset, using the mate desktop, which might work better on older or lower powered hardware. \" " >> /tmp/installmenu
+echo -n "\"k\" \"Kodi Media Center: Installs a standalone media center using the kodi software with addons for many connections to online music and TV services. \" " >> /tmp/installmenu
+echo -n "\"p\" \"Plasma Desktop: Installs the KDE Plasma desktop with the firefox web browser, thunderbird mail client, and libreoffice productivity suite. Useful for newer computers. \" " >> /tmp/installmenu
+echo -n "\"r\" \"Retroarch: Installs the retroarch multi-emulator system, allowing you to create a dedicated system used to emulated classic video games and consume media content.\" " >> /tmp/installmenu
+echo -n "\"e\" \"Everything: installs all desktop environments, office suites, security and accessibility tools, web browsers, mail clients, games, virtualization applications and so on. If unsure, and if disk space is not an issue, select this option for a complete system. \" " >> /tmp/installmenu
+createmenu /tmp/installmenu
+case "$choice" in
+b)
+export preset="base"
+;;
+B)
+export preset="basegui"
+;;
+g)
+export preset="gnome"
+;;
+m)
+export preset="mate"
+;;
+k)
+export preset="kodi"
+;;
+p)
+export preset="plasma"
+;;
+r)
+export preset="retroarch"
+;;
+e)
+export preset="all"
+;;
+esac
+unset choice
+rm /tmp/installmenu
+else
+break
+fi
+done
+if grep -q preset= ~/unattend;then
+true
+else
+echo export preset=\"$preset\" >> ~/unattend
+fi
+echo selected disk: $disk
+echo card archetecture: $arch
+echo device type/family: $devtype
+echo device: $device
+echo device id: $devid
+echo device specific packages: $devpkgs
+if [ $disk = "root_only" ];then
+echo root only install requested, root will be placed at /mnt
+else
+echo wiping and repartitioning $disk in 5 seconds
+read -t 5 var
+fi
+echo formatting and mounting device...
+export disklayout="  -o -n 1:2048:4096:EF02 -t 1:EF02 -c 1:BIOS  -n 2:6144:1030143:EF00 -t 2:EF00 -c 2:EFI  -N 3 -t 3:8300 -c 3:linux  "
+sgdisk `echo $disklayout` $disk
+sgdisk -h 2:EE $disk
+fdisk -t dos $disk<<EOF
+t
+1
+c
+w
+EOF
+partprobe > /dev/null 2>/dev/null
+sleep 1.5
+if [ -e $disk"p1" ];then
+export root=$disk"p3"
+export boot=$disk"p2"
+else
+export root=$disk"3"
+export boot=$disk"2"
+fi
+mkfs.vfat -n EFI $boot
+echo y|mkfs.ext4 -q -L root -O encrypt $root
+mount $root /mnt
+mkdir -p /mnt/boot/EFI
+mount $boot /mnt/boot/EFI
+genfstab -p -L /mnt > /tmp/fstab
+cd /mnt
+while true;do
+export keyringurl=`lynx --dump -listonly os.archlinuxarm.org/$arch/core|grep archlinuxarm-keyring|grep .tar|sed "/.sig/d"|tail -n 1|cut -f 5 -d \  `
+if curl -LO $keyringurl;then
+break
+else
+continue
+fi
+done
+while true;do
+export mirrorlisturl=`lynx --dump -listonly os.archlinuxarm.org/$arch/core|grep pacman-mirrorlist|grep .tar|sed "/.sig/d"|tail -n 1|cut -f 3 -d \  `
+if curl -Lo mirrors.tar $mirrorlisturl;then
+break
+else
+continue
+fi
+done
+pacman --needed --noconfirm -U *.pkg*
+tar -xf mirrors.tar etc/pacman.d/mirrorlist
+rm *.pkg*
+rm mirrors.tar
+curl -Lo /mnt/etc/pacman.conf $baseurl/autobuildres/pi/pacman.$arch.conf
+sed -i "s|\/etc\/pacman.d\/mirrorlist|\/mnt\/etc\/pacman.d\/mirrorlist|g" /mnt/etc/pacman.conf
+pacman-key --config /mnt/etc/pacman.conf --gpgdir /mnt/etc/pacman.d/gnupg --init
+pacman-key --config /mnt/etc/pacman.conf --gpgdir /mnt/etc/pacman.d/gnupg --populate archlinux archlinuxarm
+mkdir -p /mnt/var/lib/pacman
+mkdir -p /mnt/var/cache/pacman/pkg
+mkdir -p /mnt/usr/bin
+chmod 755 /mnt/etc/pacman.conf /mnt/etc/pacman.d/mirrorlist /mnt/etc/pacman.d /mnt/usr /mnt/usr/bin /mnt/var/lib/pacman /mnt/var/cache/pacman/pkg
+cp /bin/qemu-$transtype-static /mnt/usr/bin
+export PATH=/usr/local/bin:$PATH
+while true;do
+if pacman --arch $arch --config /mnt/etc/pacman.conf -r \/mnt --noconfirm -Sy;then
+break
+else
+continue
+fi
+done
+curl -L $baseurl/autobuildres/linux/pkg.$preset|sed "s|pacstrap \/mnt |pacman --arch $arch --config /mnt/etc/pacman.conf -r \/mnt --noconfirm --cachedir /mnt/var/cache/pacman/pkg -Sp |g" > install
+echo -n $devpkgs >> install
+echo "installing your selected software"
+echo searching for missing packages
+cat install |tr \  \\n|pacman --arch $arch --config /mnt/etc/pacman.conf -r /mnt --print-format %n -Sp - 2>/dev/stdout|grep -i 'target not found'|cut -f 3 -d : > missing
+if wc -c missing |cut -f 1 -d \  |grep -w 0;then
+sleep .01
+else
+for f in `cat missing`;do
+case "$f" in
+pacman)
+continue
+;;
+--config)
+continue
+;;
+/mnt/etc/pacman.conf)
+continue
+;;
+-r)
+continue
+;;
+/mnt)
+continue
+;;
+--needed)
+continue
+;;
+--noconfirm)
+continue
+;;
+'--overwrite')
+continue
+;;
+\\*)
+continue
+;;
+--arch)
+continue
+;;
+$arch)
+continue
+;;
+-Sp)
+continue
+;;
+--cachedir)
+continue
+;;
+/mnt/var/cache/pacman/pkg)
+continue
+;;
+esac
+echo removing $f package
+sed -i "s| $f | |g" install
+done
+fi
+case "$preset" in
+kodi)
+case "$devtype" in
+rpi)
+echo running package fixes for $preset preset
+sed -i "s|\ kodi\ |\ kodi-rpi\ kodi-rpi-dev\ kodi-rpi-eventclients\ kodi-rpi-tools-texturepacker\ |g" install
+;;
+*)
+true
+;;
+esac
+;;
+all)
+echo running package fixes for $preset preset
+sed -i "s|\ blackarch\ |\ |g;s|\ mbrola-voices\ |\ |g;s|\ mbrola-voices-ar\ |\ |g;s|\ pantheon\ |\ |g;s|\ gnome-extra\ |\ |g;s|\ emacspeak\ |\ |g;s| blackarch-anti-forensic blackarch-automation blackarch-automobile blackarch-backdoor blackarch-binary blackarch-bluetooth blackarch-code-audit blackarch-config blackarch-cracker blackarch-crypto blackarch-database blackarch-debugger blackarch-decompiler blackarch-defensive blackarch-disassembler blackarch-dos blackarch-drone blackarch-exploitation blackarch-fingerprint blackarch-firmware blackarch-forensic blackarch-fuzzer blackarch-hardware blackarch-honeypot blackarch-ids blackarch-keylogger blackarch-malware blackarch-mobile blackarch-networking blackarch-nfc blackarch-packer blackarch-proxy blackarch-radio blackarch-recon blackarch-reversing blackarch-scanner blackarch-sniffer blackarch-social blackarch-spoof blackarch-stego blackarch-tunnel blackarch-unpacker blackarch-voip blackarch-webapp blackarch-windows blackarch-wireless| |g;s| mingw-w64 mingw-w64-vulkan-devel | |g;s| argon2 | |g;s| soundrts | |g;s| wineprefix-accessible | |g" install
+;;
+esac
+echo running $arch specific kernel install fix
+sed -i "s|\ linux\ |\ \ |g;s|\ linux-headers\ |\ \ |g;s| archlinux32-keyring | archlinuxarm-keyring |g" install
+cp install pkg
+chmod 700 pkg
+for f in `./pkg 2>/dev/stdout|grep -i unable\ to\ satisfy\ dependency|cut -f 9 -d \  `;do
+sed -i "s| $f | |g" pkg
+done
+echo allow-weak-key-signatures >> /mnt/etc/pacman.d/gnupg/gpg.conf
+if ./pkg > /dev/null 2>/dev/null;then
+sed -i "s|-Sp|-Sy|g" pkg
+sed -i "s|pacman\ --arch\ $arch\ --config\ \/mnt\/etc\/pacman.conf\ -r\ \/mnt\ --noconfirm\ --cachedir\ \/mnt\/var\/cache\/pacman\/pkg\ -Sy\ --overwrite\ \\\*|pacstrap\ -C\ \/mnt\/etc\/pacman.conf\ -G\ -M\ \/mnt\ --overwrite\ \\\\*\ |g;s|\\*\ \*|\\*|g" pkg
+fi
+while true;do
+if ./pkg;then
+break
+else
+continue
+fi
+done
+rm pkg install missing
+sed -i "s|\/mnt||g" etc/pacman.conf
+case "$preset" in
+kodi)
+case "$devtype" in
+rpi)
+cat >> /mnt/boot/config.txt<<EOF
+[all]
+include kodi.config.txt
+EOF
+;;
+esac
+;;
+esac
+rm -rf /mnt/var/cache/pacman/pkg/*
+curl -L $baseurl/autobuildres/linux/files.tar.gz|tar -xz
+arch-chroot /mnt /etc/postinstall.sh $disk $preset n
+echo "Copying network used in live environment to unit..."
+cp /etc/NetworkManager/system-connections/* /mnt/etc/NetworkManager/system-connections/
+clear
+if [ -z $blueans ];then
+echo "Would you like to connect to a bluetooth device such as a keyboard on boot? If so, the device must be placed in pairing mode on every boot."
+read blueans
+else
+sleep .01
+fi
+if grep -q blueans= ~/unattend;then
+true
+else
+echo export blueans=\"$blueans\" >> ~/unattend
+fi
+case "$blueans" in
+y)
+if [ -z $macaddr ];then
+while true;do
+echo powering on bluetooth radio
+bluetoothctl power on
+echo scanning for bluetooth devices
+bluetoothctl --timeout 10 scan on|grep Device|cut -f 2 -d \]|cut -f 3,4,5 -d \ >/tmp/devlist
+if wc -l /tmp/devlist|grep -qw 0;then
+echo no devices found. Either this device\'s bluetooth radio is not opperating propperly, or no devices could be detected. Please enter the mac address and press enter. Alternatively, please enter r to rescan
+read macaddr
+if [ $macaddr == "r" ];then
+unset macaddr
+continue
+else
+if [ -z $macaddr ];then
+echo rescan >> /tmp/devlist
+createdynamicmenu cat /tmp/devlist
+export macaddr=`echo $itemname|cut -f 2 -d \"|cut -f 1-6 -d :|cut -f 1 -d \  `
+fi
+fi
+break
+else
+continue
+fi
+done
+arch-chroot /mnt systemctl enable btconnect@$macaddr
+else
+arch-chroot /mnt systemctl enable btconnect@$macaddr
+fi
+;;
+n)
+true
+;;
+*)
+true;;
+esac
+if grep -q macaddr= ~/unattend;then
+true
+else
+echo export macaddr=\"$macaddr\" >> ~/unattend
+fi
+cp /tmp/fstab /mnt/etc
+chmod 644 /mnt/etc/fstab
+case "$devtype" in
+rpi)
+cat > devpost.sh<<EOF
+cd /boot/EFI
+rm -rf EFI/boot
+mv EFI/arch EFI/boot
+mv EFI/boot/grubaa64.efi EFI/boot/bootaa64.efi
+sed -i "s|EFI\/arch\/grubaa64.efi|EFI\/boot\/bootaa64.efi|g" /bin/bootcrypt
+systemctl enable fbdetect
+cd /boot/EFI
+curl -Lo efi3.zip https://github.com/pftf/RPi3/releases/download/v1.39/RPi3_UEFI_Firmware_v1.39.zip
+unzip -o efi3.zip
+rm efi3.zip Readme.md firmware/Readme.txt
+mv config.txt config3.txt
+mv RPI_EFI.fd RPI3_EFI.fd
+sed -i "s|RPI_EFI.fd|RPI3_EFI.fd|g" config3.txt
+curl -Lo efi4.zip https://github.com/pftf/RPi4/releases/download/v1.38/RPi4_UEFI_Firmware_v1.38.zip
+unzip -o efi4.zip
+rm efi4.zip Readme.md firmware/Readme.txt
+mv config.txt config4.txt
+mv RPI_EFI.fd RPI4_EFI.fd
+sed -i "s|RPI_EFI.fd|RPI4_EFI.fd|g" config4.txt
+curl -Lo efi5.zip 'https://github.com/worproject/rpi5-uefi/releases/download/v0.3/RPi5_UEFI_Release_v0.3.zip'
+unzip -o efi5.zip
+mv config.txt config5.txt
+mv RPI_EFI.fd RPI5_EFI.fd
+sed -i "s|RPI_EFI.fd|RPI5_EFI.fd|g" config5.txt
+rm efi5.zip
+echo \[pi3\] > config.txt
+cat config3.txt >> config.txt
+echo \[pi3+\] >> config.txt
+cat config3.txt >> config.txt
+rm config3.txt
+echo \[pi4\] >> config.txt
+cat config4.txt >> config.txt
+echo \[pi400\] >> config.txt
+cat config4.txt >> config.txt
+echo \[cm4\] >> config.txt
+cat config4.txt >> config.txt
+echo \[cm4s\] >> config.txt
+cat config4.txt >> config.txt
+rm config4.txt
+echo \[pi5\] >> config.txt
+cat config5.txt >> config.txt
+rm config5.txt
+echo \[all\] >> config.txt
+echo dtparam=audio=on >> config.txt
+echo dtparam=krnbt=on >> config.txt
+echo dtparam=pcie=on >> config.txt
+sed -i "/dtoverlay=miniuart-bt/d" config.txt
+dos2unix config.txt
+cd /
+rm /devpost.sh /bin/qemu-$transtype-static
+EOF
+sed -i "s|_EOF_|EOF|g" devpost.sh
+chmod 755 devpost.sh
+;;
+rpi-vfw)
+umount /mnt/boot/EFI
+mount $boot /mnt/boot
+genfstab -L /mnt > /mnt/etc/fstab
+cat > devpost.sh<<EOF
+systemctl enable fbdetect
+cd /
+echo initramfs initramfs-linux.img followkernel > /boot/config.txt
+echo camera_auto_detect=1 >> /boot/config.txt
+echo display_auto_detect=1 >> /boot/config.txt
+echo dtparam=audio=on  >> /boot/config.txt
+echo dtparam=krnbt=on  >> /boot/config.txt
+echo dtparam=random=on  >> /boot/config.txt
+echo dtoverlay=vc4-kms-v3d >> /boot/config.txt
+echo max_framebuffers=2  >> /boot/config.txt
+echo hdmi_force_hotplug=1 >> /boot/config.txt
+echo arm_boost=1 >> /boot/config.txt
+echo root=/dev/disk/by-partlabel/linux rw > /boot/cmdline.txt
+rm /devpost.sh /bin/qemu-$transtype-static
+EOF
+chmod 755 devpost.sh
+;;
+pine)
+cat > devpost.sh<<EOF
+sed -i "s|quiet bootsplash.bootfile=bootsplash-themes/danctnix/bootsplash| |g" /boot/boot.txt
+cd /boot
+./mkscr
+cd /
+echo installing u-boot bootloader to sunxi reserved area
+dd if=/boot/u-boot-sunxi-with-spl-pinephone-552.bin of=$disk bs=8k seek=1
+echo enabling modem support
+systemctl enable eg25-manager ModemManager
+rm /devpost.sh /bin/qemu-$transtype-static
+EOF
+chmod 755 devpost.sh
+;;
+esac
+if [ -e /mnt/devpost.sh ];then
+arch-chroot /mnt /devpost.sh
+fi
+cd
+if [ -e /root/postinstall ];then
+cp /root/postinstall /mnt
+chmod 755 /mnt/postinstall
+while true;do
+if arch-chroot /mnt /postinstall;then
+rm /mnt/postinstall
+break
+else
+continue
+fi
+done
+fi
+while true;do
+if [ -z $completeaction ];then
+echo "\"installation complete! Please select an option.\"">/tmp/actmenu
+echo -n "\"p\" \"power off system\" \"r\" \"reboot system\" \"s\" \"Drop To System Shell\"">>/tmp/actmenu
+createmenu /tmp/actmenu
+case "$choice" in
+p)
+export completeaction="poweroff"
+;;
+r)
+export completeaction="reboot"
+;;
+s)
+export completeaction="shell"
+;;
+esac
+break
+else
+break
+fi
+done
+if grep -q completeaction= ~/unattend;then
+true
+else
+echo export completeaction=\"$completeaction\" >> ~/unattend
+fi
+cd
+if [ -e /mnt/unattend ];then
+echo using unattend on local disk
+else
+echo copying unattend settings to installed system
+cp ~/unattend /mnt
+chown root:root /mnt/unattend
+chmod 600 /mnt/unattend
+fi
+case "$completeaction" in
+poweroff)
+echo "Installation complete! powering off"
+sync
+poweroff -f
+;;
+reboot)
+echo "Installation complete! rebooting"
+sync
+reboot -f
+;;
+shell)
+echo installation complete! $root is mounted on /mnt, $boot is mounted on /mnt/boot, Launching shell
+zsh
+;;
+esac

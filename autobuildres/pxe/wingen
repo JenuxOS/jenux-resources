@@ -1,0 +1,53 @@
+export iso=$1
+export output=$2
+if [ -e $iso ];then
+sleep .01
+else
+echo cannot find windows iso
+exit 1
+fi
+if [ -z $output ];then
+export output=winpe.iso
+fi
+if [ -d scripts ];then
+sleep .01
+else
+mkdir -p scripts
+fi
+if [ -e scripts/bcdinst.bat ];then
+sleep .01
+else
+cat > scripts/bcdinst.bat <<EOF
+@echo on
+diskpart /s x:\espmount
+format s: /fs:fat32 /q /y
+chkdsk w: /f
+bcdboot W:\Windows /s S: /f ALL
+bcdboot W:\Windows /s W: /f ALL
+dism /add-driver /driver:w:\drivers /recurse /image:w:\\
+cd/dw:\windows\system32
+shutdown /s /t 0
+EOF
+fi
+if [ -e scripts/espmount ];then
+sleep .01
+else
+cat > scripts/espmount <<EOF
+select disk 0
+select partition 1
+assign letter=s
+select partition 3
+assign letter=w
+EOF
+fi
+udisksctl loop-setup -f $iso
+export loopdev=`losetup|grep -iw $iso|cut -f 1 -d \  `
+udisksctl mount -b $loopdev
+export isomount=`mount|grep -iw $loopdev|cut -f 3 -d \  `
+mkwinpeimg -s scripts/bcdinst.bat -W $isomount -O scripts -i $output
+umount $isomount
+udisksctl loop-delete -b $loopdev
+rm scripts/bcdinst.bat scripts/espmount
+if ls scripts|wc -l|grep -qw 0;then
+rmdir scripts
+fi

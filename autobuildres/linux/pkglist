@@ -305,12 +305,14 @@ smartmontools
 sof-firmware
 sof-tools
 sox
+speakup-utils
 speech-dispatcher
 speechctl
 speedtouch
 sqlite
 squashfs-tools
 starship
+stormux-keyring
 sudo
 sysfsutils
 syslinux

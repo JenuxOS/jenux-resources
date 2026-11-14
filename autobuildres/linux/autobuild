@@ -568,7 +568,7 @@ done
 export IFS=$oldifs
 while true;do
 echo downloading package installation script from $pkgurl
-if curl -o pkg $pkgurl;then
+if curl -Lo pkg $pkgurl;then
 break
 else
 echo "An error has occured. Retrying."

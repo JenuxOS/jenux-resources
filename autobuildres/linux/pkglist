@@ -202,6 +202,7 @@ lxc
 lynx
 lz4
 lzip
+magic-wormhole
 man-db
 man-pages
 mc
@@ -240,7 +241,6 @@ open-vm-tools
 openbsd-netcat
 openconnect
 openpgp-card-tools
-openresolv
 openssh
 openssl
 openvpn
@@ -304,6 +304,7 @@ shim-signed
 smartmontools
 sof-firmware
 sof-tools
+sonicde-keyring 
 sox
 speakup-utils
 speech-dispatcher

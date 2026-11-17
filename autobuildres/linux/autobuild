@@ -488,6 +488,9 @@ export presetname="gnome"
 m)
 export presetname="mate"
 ;;
+s)
+export presetname="sonicde"
+;;
 k)
 export presetname="kodi"
 ;;

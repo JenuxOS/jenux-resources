@@ -401,141 +401,6 @@ pacman -Sg $g|cut -f 2 -d \  >> basegui
 done
 unset neededgroups
 fi
-if [ -e all ];then
-sleep .01
-else
-cp base all
-export neededgroups=`pacman -Sg|sort|uniq|sed '/blackarch-anti-forensic/d;/blackarch-automation/d;/blackarch-automobile/d;/blackarch-backdoor/d;/blackarch-binary/d;/blackarch-bluetooth/d;/blackarch-code-audit/d;/blackarch-config/d;/blackarch-cracker/d;/blackarch-crypto/d;/blackarch-database/d;/blackarch-debugger/d;/blackarch-decompiler/d;/blackarch-defensive/d;/blackarch-disassembler/d;/blackarch-dos/d;/blackarch-drone/d;/blackarch-exploitation/d;/blackarch-fingerprint/d;/blackarch-firmware/d;/blackarch-forensic/d;/blackarch-fuzzer/d;/blackarch-gpu/d;/blackarch-hardware/d;/blackarch-honeypot/d;/blackarch-ids/d;/blackarch-keylogger/d;/blackarch-malware/d;/blackarch-misc/d;/blackarch-mobile/d;/blackarch-networking/d;/blackarch-nfc/d;/blackarch-packer/d;/blackarch-proxy/d;/blackarch-radio/d;/blackarch-recon/d;/blackarch-reversing/d;/blackarch-scanner/d;/blackarch-sniffer/d;/blackarch-social/d;/blackarch-spoof/d;/blackarch-stego/d;/blackarch-tunnel/d;/blackarch-unpacker/d;/blackarch-voip/d;/blackarch-webapp/d;/blackarch-windows/d;/blackarch-wireless/d;/fcitx5-im/d;/lxde-gtk3/d;/openrc-accessible/d;/pantheon/d;/budgie/d'|tr \\\\n \\  `
-cat >> all <<EOF
-audacious
-audacious-plugins
-audacity
-avahi
-binfmt-support
-blueman
-brave-bin
-cups
-dbus-broker
-dectalk
-dnscrypt-proxy
-edk2-ovmf
-emacspeak
-foomatic-db
-foomatic-db-gutenprint-ppds
-foomatic-db-nonfree
-foomatic-db-nonfree-ppds
-foomatic-db-ppds
-gammu
-gnu-free-fonts
-google-chrome
-gst-plugin-pipewire
-gvfs-afc 
-gvfs-goa 
-gvfs-gphoto2 
-gvfs-mtp 
-gvfs-nfs 
-gvfs-smb 
-hplip
-ipp-usb
-java-atk-wrapper-common 
-java-atk-wrapper-openjdk8 
-java-atk-wrapper-openjdk11 
-java-atk-wrapper-openjdk17 
-kdialog
-kodi-addons-accessible
-kodi-standalone-service
-lib32-alsa-lib
-lib32-alsa-plugins
-lib32-gnutls
-lib32-mpg123
-lib32-pipewire
-lib32-pipewire-jack
-lib32-pipewire-v4l2
-lib32-vkd3d
-libdbi
-libdvdcss
-libgoom2
-libkate
-libmicrodns
-libmythes
-libnm
-libnma
-libnotify
-libreoffice-fresh
-libtiger
-libva-intel-driver
-live-media
-lua-socket
-mate-notification-daemon 
-mate-polkit
-mate-screensaver
-msitools
-mutt
-neomutt
-network-manager-applet
-network-manager-sstp
-nm-connection-editor
-orca
-pamac-aur
-pavucontrol
-pianobar
-pidgin
-pidgin-encryption
-pidgin-hotkeys
-pidgin-kwallet
-pidgin-otr
-pidgin-talkfilters
-pidgin-toobars
-pidgin-xmpp-receipts
-pipewire
-pipewire-docs
-pipewire-jack
-pipewire-pulse
-pipewire-v4l2
-pipewire-x11-bell
-pipewire-zeroconf
-purple-gammu
-purple-hangouts-hg
-qemu-desktop
-qemu-emulators-full
-ratpoison
-rdesktop
-realtime-privileges
-remmina
-rhvoice-language-english
-rhvoice-voice-bdl
-rtkit
-scrot
-skype-api-pidgin
-sox
-svox-pico-git
-system-config-printer
-talkfilters
-terminator
-tesseract
-tesseract-data-eng
-thunderbird
-udisks2
-vcdimager
-virtualbox
-virtualbox-host-dkms
-virt-manager
-vlc
-vm-script
-vkd3d
-wireplumber
-xorg-xinit
-xsel
-yasr
-youtube-viewer
-yt-dlp
-EOF
-for g in `echo -en $neededgroups`;do
-pacman -Sg $g|cut -f 2 -d \  >> all
-done
-unset neededgroups
-sed -i "/gnu-netcat/d;/archivebox/d" all
-fi
 if [ -e gnome ];then
 sleep .01
 else
@@ -767,6 +632,90 @@ pacman -Sg $g|cut -f 2 -d \  >> mate
 done
 unset neededgroups
 fi
+if [ -e sonicde ];then
+sleep .01
+else
+export neededgroups=`echo -en sonicde xorg xorg-apps xorg-drivers xorg-fonts`
+cat >> sonicde <<EOF
+audacious
+audacious-plugins
+blueman
+brave-bin
+cthulhu
+cups
+dbus-broker
+edk2-ovmf
+foomatic-db
+foomatic-db-gutenprint-ppds
+foomatic-db-nonfree
+foomatic-db-nonfree-ppds
+foomatic-db-ppds
+gparted
+gst-plugin-pipewire
+gvfs-afc 
+gvfs-goa 
+gvfs-gphoto2 
+gvfs-mtp 
+gvfs-nfs 
+gvfs-smb 
+hplip
+ipp-usb
+lib32-alsa-lib
+lib32-alsa-plugins
+lib32-gnutls
+lib32-mpg123
+lib32-pipewire
+lib32-pipewire-jack
+lib32-pipewire-v4l2
+lib32-vkd3d
+libnotify
+libreoffice-fresh
+network-manager-applet
+nvidia-open-dkms
+nvidia-prime
+nvidia-settings
+nvidia-utils
+orca
+pamac-aur
+pavucontrol
+pipewire
+pipewire-docs
+pipewire-jack
+pipewire-pulse
+pipewire-v4l2
+pipewire-x11-bell
+pipewire-zeroconf
+qemu-desktop
+qemu-emulators-full
+rdesktop
+realtime-privileges
+remmina
+rhvoice
+rhvoice-language-english
+rhvoice-voice-bdl
+rtkit
+scrot
+sonicde-meta
+system-config-printer
+terminator
+tesseract
+tesseract-data-eng
+thunderbird
+ttf-ms-win11-auto
+virt-manager
+vkd3d
+vlc
+wireplumber
+xdg-desktop-portal-gtk
+xdg-utils
+xorg-xinit
+xsel
+EOF
+for g in `echo -en $neededgroups`;do
+pacman -Sg $g|cut -f 2 -d \  >> sonicde
+done
+unset neededgroups
+fi
 if [ -e plasma ];then
 sleep .01
 else
@@ -858,7 +807,7 @@ done
 unset neededgroups
 fi
 cat 00header base|tr \\n \  >pkg.base
-for f in "all" "basegui" "gnome" "kodi" "plasma" "retroarch" "mate";do
+for f in "all" "basegui" "gnome" "kodi" "plasma" "retroarch" "mate" "sonicde";do
 cat 00header base $f|tr \\n \  >pkg.$f
 rm $f
 done

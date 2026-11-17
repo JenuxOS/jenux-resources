@@ -469,9 +469,11 @@ echo -n "\"B\" \"basic command line with GUI support: installs a similar environ
 echo -n "\"g\" \"Gnome desktop: Installs a full gnome desktop environment with the firefox web browser, thunderbird mail client, and libreoffice productivity suite. Useful for newer computers. \" " >> /tmp/installmenu
 echo -n "\"m\" \"Mate Desktop: Installs a similar environment to the above gnome desktop preset, using the mate desktop, which might work better on older or lower powered hardware. \" " >> /tmp/installmenu
 echo -n "\"p\" \"Plasma Desktop: Installs the KDE Plasma desktop with the firefox web browser, thunderbird mail client, and libreoffice productivity suite. Useful for newer computers. \" " >> /tmp/installmenu
+if cat /etc/pacman.conf|grep -iqw \[sonicde\];then
+echo -n "\"s\" \"sonicde Desktop: Installs the sonicde, similar to KDE Plasma desktop but using the x11 window system, with the firefox web browser, thunderbird mail client, and libreoffice productivity suite. Useful for newer computers. \" " >> /tmp/installmenu
+fi
 echo -n "\"k\" \"Kodi Media Center: Installs a standalone media center using the kodi software with addons for many connections to online music and TV services. \" " >> /tmp/installmenu
 echo -n "\"r\" \"Retroarch: Installs the retroarch multi-emulator system, allowing you to create a dedicated system used to emulated classic video games and consume media content.\" " >> /tmp/installmenu
-echo -n "\"e\" \"Everything: installs all desktop environments, office suites, security and accessibility tools, web browsers, mail clients, games, virtualization applications and so on. If unsure, and if disk space is not an issue, select this option for a complete system. \" " >> /tmp/installmenu
 createmenu /tmp/installmenu
 case "$choice" in
 b)

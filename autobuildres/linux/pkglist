@@ -82,7 +82,6 @@ espeak-ng
 espeakup
 ethtool
 ex-vi-compat
-exfat-utils
 exfatprogs
 expat
 f2fs-tools
@@ -807,7 +806,7 @@ done
 unset neededgroups
 fi
 cat 00header base|tr \\n \  >pkg.base
-for f in "all" "basegui" "gnome" "kodi" "plasma" "retroarch" "mate" "sonicde";do
+for f in "basegui" "gnome" "kodi" "plasma" "retroarch" "mate" "sonicde";do
 cat 00header base $f|tr \\n \  >pkg.$f
 rm $f
 done
